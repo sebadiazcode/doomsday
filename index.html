@@ -1,0 +1,2187 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Legacy Doomsday Trainer</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            obsidian: '#050507',
+            panel: '#0a0b0e',
+            surface: '#111318',
+            surfaceHover: '#171a22',
+            borderCrisp: '#1e222b',
+            amberAccent: '#e2b857',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* True Obsidian-Black Base Theme */
+    html, body {
+      background-color: #050507;
+      color: #f8fafc;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* Subtle diagonal hatch for empty Doomsday Pile slots */
+    .empty-slot-hatch {
+      background-color: #0c0d12;
+      background-image: repeating-linear-gradient(
+        -45deg,
+        rgba(30, 34, 43, 0.35),
+        rgba(30, 34, 43, 0.35) 6px,
+        rgba(10, 11, 14, 0.75) 6px,
+        rgba(10, 11, 14, 0.75) 14px
+      );
+    }
+
+    /* Clean dark scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #07080a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e222b;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #333a48;
+    }
+
+    /* Standard MTG Card Aspect Ratio (63mm x 88mm) */
+    .mtg-card-aspect {
+      aspect-ratio: 63 / 88;
+    }
+
+    /* Candidate Pool Card Hover Elevation */
+    .pool-card-wrapper {
+      transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease, opacity 0.2s ease;
+    }
+    .pool-card-wrapper:hover {
+      transform: translateY(-12px) scale(1.04);
+      z-index: 40 !important;
+      box-shadow: 0 18px 34px -6px rgba(0, 0, 0, 0.95), 0 0 0 2px #e2b857;
+    }
+
+    /* Battlefield Tapped Permanent Rotation */
+    .permanent-card {
+      transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s ease;
+    }
+    .permanent-card.tapped {
+      transform: rotate(14deg) translateX(6px) translateY(3px);
+      filter: brightness(0.62) saturate(0.85);
+    }
+
+    /* Drag-over highlight for Doomsday Pile slots */
+    .pile-slot.drag-over {
+      border-color: #e2b857 !important;
+      box-shadow: 0 0 20px rgba(226, 184, 87, 0.3), inset 0 0 12px rgba(226, 184, 87, 0.15);
+      transform: scale(1.02);
+    }
+  </style>
+</head>
+<body class="bg-[#050507] text-[#f4f5f7] antialiased selection:bg-[#eab308] selection:text-[#050507] min-h-screen flex flex-col">
+
+  <!-- ===================================================================== -->
+  <!-- TOP HEADER & 3-PUZZLE SWITCHER BAR                                    -->
+  <!-- ===================================================================== -->
+  <header class="w-full border-b border-[#1e222b] bg-[#0a0b0e] sticky top-0 z-40">
+    <div class="max-w-[1720px] mx-auto px-3 sm:px-6 py-2.5 flex flex-col gap-2.5">
+      <!-- Top Row: Brand Title, 3-Puzzle Tabs, Progress & Rules -->
+      <div class="flex flex-wrap items-center justify-between gap-2.5">
+        <!-- Left: Mobile Drawer Button & Brand Title -->
+        <div class="flex items-center gap-2.5">
+          <button
+            id="mobileDeckToggle"
+            type="button"
+            class="xl:hidden px-3 py-1.5 rounded-md bg-[#111318] border border-[#1e222b] hover:border-[#eab308]/70 text-xs font-semibold text-[#f4f5f7] flex items-center gap-1.5 transition"
+          >
+            <svg class="w-3.5 h-3.5 text-[#eab308]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10" />
+            </svg>
+            <span>Decklist (60)</span>
+          </button>
+
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-[#eab308]"></span>
+            <h1 class="text-xs sm:text-sm font-bold tracking-wider text-[#f4f5f7] uppercase">
+              Legacy Doomsday Trainer
+            </h1>
+          </div>
+        </div>
+
+        <!-- Center: 3-Puzzle Switcher Tabs -->
+        <nav aria-label="Puzzle Selector" id="puzzleTabsContainer" class="flex flex-wrap items-center gap-1.5 order-3 lg:order-2 w-full lg:w-auto justify-center">
+          <!-- Rendered dynamically via JS -->
+        </nav>
+
+        <!-- Right: Progress Tracker & Rules Button -->
+        <div class="flex items-center gap-2 order-2 lg:order-3">
+          <span
+            id="solvedProgressBadge"
+            class="px-2.5 py-1 rounded-full bg-[#111318] border border-[#1e222b] font-mono text-[11px] font-semibold text-[#f4f5f7]"
+          >
+            Solved: 0 / 3
+          </span>
+
+          <button
+            id="openHelpBtn"
+            type="button"
+            class="px-2.5 py-1 rounded-md bg-[#111318] border border-[#1e222b] hover:border-[#eab308]/70 text-[11px] font-semibold text-[#cbd5e1] hover:text-[#f4f5f7] transition flex items-center gap-1"
+          >
+            <svg class="w-3.5 h-3.5 text-[#eab308]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span class="hidden md:inline">Rules</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Bottom Row: Active Puzzle Scenario Prompt Banner -->
+      <div class="px-3.5 py-2 rounded-lg bg-[#050507] border border-[#1e222b] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span id="puzzleVariationTag" class="px-2 py-0.5 rounded bg-[#111318] border border-[#1e222b] font-mono text-[10px] font-bold uppercase tracking-wider text-[#eab308] shrink-0">
+            Puzzle 1
+          </span>
+          <p id="puzzlePromptText" class="text-xs sm:text-[13px] font-medium text-[#f4f5f7] leading-snug">
+            <!-- Populated dynamically per puzzle -->
+          </p>
+        </div>
+        <span class="text-[11px] text-[#9ca3af] shrink-0 hidden xl:inline">
+          Opponent ignored • Submit 5-card pile to execute stack &amp; library resolution
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN 4-ZONE PUZZLE WORKSPACE                                          -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 w-full max-w-[1720px] mx-auto p-3 sm:p-4 lg:p-5 grid grid-cols-1 xl:grid-cols-[248px_206px_1fr_440px] gap-4 items-stretch">
+
+    <!-- =================================================================== -->
+    <!-- ZONE 1: LEFT SIDEBAR — 60-CARD LEGACY DOOMSDAY DECKLIST             -->
+    <!-- =================================================================== -->
+    <aside
+      id="decklistSidebar"
+      class="hidden xl:flex flex-col bg-[#0a0b0e] border border-[#1e222b] rounded-lg overflow-hidden max-h-[calc(100vh-128px)]"
+    >
+      <div class="px-3.5 py-2.5 border-b border-[#1e222b] bg-[#0d0f13] flex items-center justify-between">
+        <h2 class="text-xs font-bold tracking-wider text-[#f4f5f7] uppercase">
+          Decklist
+        </h2>
+        <span class="font-mono text-[11px] font-semibold px-2 py-0.5 rounded bg-[#111318] border border-[#1e222b] text-[#cbd5e1]">
+          60 Cards
+        </span>
+      </div>
+
+      <div class="px-3.5 py-1.5 bg-[#08090c] border-b border-[#1e222b] text-[11px] text-[#9ca3af] flex items-center justify-between">
+        <span>Legacy Doomsday</span>
+        <span>Hover card to view</span>
+      </div>
+
+      <!-- Scrollable 60-Card List -->
+      <div id="decklistContainer" class="flex-1 overflow-y-auto divide-y divide-[#1e222b]/50 px-1.5 py-1">
+        <!-- Populated via JS -->
+      </div>
+    </aside>
+
+    <!-- Mobile / Tablet Decklist Slide-Over Drawer -->
+    <div
+      id="mobileDeckDrawer"
+      class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden xl:hidden"
+    >
+      <div class="w-72 max-w-[85vw] h-full bg-[#0a0b0e] border-r border-[#1e222b] flex flex-col">
+        <div class="px-4 py-3 border-b border-[#1e222b] bg-[#0d0f13] flex items-center justify-between">
+          <div>
+            <h2 class="text-xs font-bold tracking-wider text-[#f4f5f7] uppercase">
+              Decklist (60 Cards)
+            </h2>
+            <p class="text-[11px] text-[#9ca3af]">Tap any card to inspect</p>
+          </div>
+          <button
+            id="closeMobileDeckDrawer"
+            type="button"
+            class="px-2 py-1 rounded bg-[#111318] border border-[#1e222b] text-xs text-[#cbd5e1] hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="mobileDecklistContainer" class="flex-1 overflow-y-auto divide-y divide-[#1e222b]/50 px-2 py-1">
+          <!-- Populated via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- ZONE 2: CARDS TO PICK FROM (7 CANDIDATE CARDS)                      -->
+    <!-- =================================================================== -->
+    <section class="bg-[#0a0b0e] border border-[#1e222b] rounded-lg p-3.5 flex flex-col">
+      <div class="mb-3">
+        <h2 class="text-xs font-bold tracking-wider text-[#f4f5f7] uppercase">
+          Cards to Pick From
+        </h2>
+        <p class="text-[11px] text-[#9ca3af] mt-0.5">
+          Click to add, or drag to any slot
+        </p>
+      </div>
+
+      <!-- Desktop Vertical Stack & Mobile/Tablet Horizontal Strip -->
+      <div
+        id="candidatePoolContainer"
+        class="flex-1 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 xl:flex xl:flex-col items-center justify-start gap-2.5 xl:gap-0 pt-1 pb-2"
+      >
+        <!-- Populated via JS -->
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- ZONE 3: CENTER ARENA — YOUR BOARD & YOUR HAND                       -->
+    <!-- =================================================================== -->
+    <div class="flex flex-col gap-4">
+
+      <!-- YOUR BOARD -->
+      <section class="bg-[#0a0b0e] border border-[#1e222b] rounded-lg p-4 flex-1 flex flex-col justify-between">
+        <div>
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[#1e222b]">
+            <h2 class="text-xs font-bold tracking-wider text-[#f4f5f7] uppercase">
+              Your Board
+            </h2>
+
+            <!-- Planned Floating Mana Helper -->
+            <div class="flex items-center gap-2 bg-[#111318] border border-[#1e222b] rounded-full px-3 py-1">
+              <span class="text-[11px] font-medium text-[#9ca3af]">Planned Mana:</span>
+              <span id="plannedManaDisplay" class="inline-flex items-center gap-1 font-mono text-xs font-semibold text-[#cbd5e1]">
+                0
+              </span>
+              <button
+                id="untapAllBtn"
+                type="button"
+                class="text-[10px] font-semibold uppercase tracking-wider text-[#eab308] hover:underline ml-1"
+              >
+                Reset Lands
+              </button>
+            </div>
+          </div>
+
+          <!-- Life & Turn Status Badges -->
+          <div class="mt-4 flex flex-wrap items-center gap-3 sm:gap-4">
+            <div class="flex items-baseline gap-1.5">
+              <span id="boardLifeValue" class="font-mono text-3xl sm:text-4xl font-bold text-[#f4f5f7] leading-none">10</span>
+              <span class="text-xs font-bold tracking-wider text-[#cbd5e1] uppercase">Life</span>
+              <span id="boardLifeBefore" class="text-xs text-[#9ca3af] ml-1">(20 before Doomsday)</span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <span id="boardLandDropBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#111318] border border-[#1e222b] text-[#9ca3af]">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#64748b]"></span>
+                Land drop used (1/1)
+              </span>
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#111318] border border-[#1e222b] text-[#cbd5e1]">
+                Spells cast: <strong id="boardSpellsCast" class="font-mono text-[#f4f5f7]">2</strong>
+              </span>
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#111318] border border-[#1e222b] text-[#cbd5e1]">
+                Cards drawn: <strong id="boardCardsDrawn" class="font-mono text-[#f4f5f7]">0</strong>
+              </span>
+            </div>
+          </div>
+
+          <!-- Battlefield Permanents -->
+          <div class="mt-5">
+            <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2.5">
+              <h3 class="text-[11px] font-bold tracking-wider text-[#cbd5e1] uppercase">
+                Battlefield
+              </h3>
+              <span class="text-[11px] text-[#9ca3af]">
+                Click untapped permanents to tap/untap while planning
+              </span>
+            </div>
+
+            <div id="battlefieldContainer" class="flex flex-wrap items-center gap-4 min-h-[180px] p-3.5 rounded-lg bg-[#07080b] border border-[#1e222b]">
+              <!-- Interactive Lands injected via JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- YOUR HAND -->
+      <section class="bg-[#0a0b0e] border border-[#1e222b] rounded-lg p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-bold tracking-wider text-[#f4f5f7] uppercase">
+            Your Hand
+          </h2>
+          <span id="handCountLabel" class="font-mono text-[11px] text-[#9ca3af]">3 Cards in Hand</span>
+        </div>
+
+        <div id="handContainer" class="flex flex-wrap items-center gap-4 min-h-[180px] p-3.5 rounded-lg bg-[#07080b] border border-[#1e222b]">
+          <!-- Active Puzzle Hand Cards injected via JS -->
+        </div>
+      </section>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- ZONE 4: RIGHT ARENA — OPPONENT & DOOMSDAY PILE                      -->
+    <!-- =================================================================== -->
+    <div class="flex flex-col gap-4">
+
+      <!-- OPPONENT PANEL -->
+      <section class="bg-[#0a0b0e] border border-[#1e222b] rounded-lg p-4">
+        <div class="flex items-center justify-between pb-2.5 border-b border-[#1e222b]">
+          <h2 class="text-xs font-bold tracking-wider text-[#f4f5f7] uppercase">
+            Opponent
+          </h2>
+          <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#111318] border border-[#1e222b] text-xs font-medium text-[#cbd5e1]">
+            Life <strong class="font-mono text-sm text-[#f4f5f7]">20</strong>
+          </span>
+        </div>
+
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2.5 text-xs">
+          <div>
+            <div class="text-[10px] font-bold tracking-wider text-[#9ca3af] uppercase mb-0.5">
+              Hand (Revealed)
+            </div>
+            <p class="text-[#cbd5e1]">Nothing (No opponent interaction)</p>
+          </div>
+          <div>
+            <div class="text-[10px] font-bold tracking-wider text-[#9ca3af] uppercase mb-0.5">
+              Battlefield
+            </div>
+            <p class="text-[#9ca3af]">Nothing</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- DOOMSDAY PILE BUILDER -->
+      <section class="bg-[#0a0b0e] border border-[#1e222b] rounded-lg p-4 flex-1 flex flex-col justify-between">
+        <div>
+          <div class="text-center mb-4">
+            <h2 id="pileBuilderTitle" class="text-sm font-bold tracking-wider text-[#f4f5f7] uppercase">
+              Doomsday Pile — Puzzle 1
+            </h2>
+            <p class="text-xs text-[#9ca3af] mt-0.5">
+              Choose 5 cards and order them, top first.
+            </p>
+          </div>
+
+          <!-- 5 Numbered Pile Slots -->
+          <div id="pileSlotsContainer" class="grid grid-cols-5 gap-2 sm:gap-2.5">
+            <!-- 5 Interactive Drop Slots injected via JS -->
+          </div>
+        </div>
+
+        <!-- Controls & Unlimited Attempts Footer -->
+        <div class="mt-5 pt-4 border-t border-[#1e222b] flex flex-col items-center gap-3.5">
+          <!-- Submit / Clear Buttons -->
+          <div class="flex flex-wrap items-center justify-center gap-2.5 w-full">
+            <button
+              id="submitPileBtn"
+              type="button"
+              disabled
+              class="px-5 py-2.5 rounded-md text-xs font-bold tracking-wider uppercase transition
+                     bg-[#161922] text-[#64748b] border border-[#1e222b] cursor-not-allowed
+                     enabled:bg-[#eab308] enabled:text-[#050507] enabled:border-[#eab308] enabled:cursor-pointer enabled:hover:brightness-110"
+            >
+              Submit Pile
+            </button>
+
+            <button
+              id="clearPileBtn"
+              type="button"
+              class="px-4 py-2.5 rounded-md text-xs font-semibold tracking-wider uppercase
+                     bg-[#111318] hover:bg-[#181b23] text-[#cbd5e1] border border-[#1e222b] transition"
+            >
+              Clear
+            </button>
+          </div>
+
+          <!-- Unlimited Attempts Status -->
+          <div class="flex flex-col items-center gap-1">
+            <span id="attemptStatusText" class="text-[11px] font-semibold tracking-wider text-[#9ca3af] uppercase">
+              Unlimited Attempts
+            </span>
+          </div>
+
+          <!-- Subtle Helper Buttons -->
+          <div class="flex flex-wrap items-center justify-center gap-2">
+            <button
+              id="resetPuzzleBtn"
+              type="button"
+              class="px-3.5 py-1.5 rounded-md text-xs font-medium bg-[#111318] hover:bg-[#181b23] text-[#cbd5e1] hover:text-[#f4f5f7] border border-[#1e222b] transition"
+            >
+              Reset Puzzle
+            </button>
+            <button
+              id="loadWinningLineBtn"
+              type="button"
+              class="px-3.5 py-1.5 rounded-md text-xs font-medium bg-[#111318] hover:bg-[#181b23] text-[#eab308]/90 hover:text-[#eab308] border border-[#1e222b] hover:border-[#eab308]/40 transition"
+            >
+              Show Solution
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- FLOATING CARD HOVER INSPECTOR TOOLTIP                                 -->
+  <!-- ===================================================================== -->
+  <div
+    id="floatingCardTooltip"
+    class="fixed pointer-events-none z-50 hidden transition-opacity duration-150"
+    style="width: 245px;"
+  >
+    <div class="rounded-xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.96)] border-2 border-[#eab308] bg-[#0a0b0e]">
+      <div id="tooltipCardRender" class="w-full mtg-card-aspect"></div>
+      <div id="tooltipCardNote" class="px-3 py-2 bg-[#0a0b0e] border-t border-[#1e222b] text-[11px] text-[#cbd5e1] leading-snug"></div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- INTERACTIVE STEP-BY-STEP PILE RESOLUTION THEATER MODAL                -->
+  <!-- ===================================================================== -->
+  <div
+    id="resolutionModal"
+    class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden flex items-center justify-center p-2.5 sm:p-5"
+  >
+    <div class="w-full max-w-6xl bg-[#0a0b0e] border border-[#1e222b] rounded-xl shadow-[0_25px_80px_rgba(0,0,0,0.98)] overflow-hidden flex flex-col max-h-[94vh]">
+      <!-- Modal Header -->
+      <div class="px-5 py-3.5 bg-[#0d0f13] border-b border-[#1e222b] flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span id="resolutionBadge" class="px-2.5 py-1 rounded text-[11px] font-mono font-bold uppercase tracking-wider bg-[#111318] text-[#eab308] border border-[#eab308]/40">
+            Step 0
+          </span>
+          <h3 id="resolutionModalTitle" class="text-sm sm:text-base font-bold text-[#f4f5f7]">
+            Puzzle 1
+          </h3>
+        </div>
+        <button
+          id="closeResolutionModal"
+          type="button"
+          class="px-3 py-1 rounded-md bg-[#111318] hover:bg-[#1a1d26] border border-[#1e222b] text-xs font-semibold text-[#cbd5e1] hover:text-white transition"
+        >
+          Close ✕
+        </button>
+      </div>
+
+      <!-- Live State Bar (Life, Mana Pool, Library Cards Left, Devotion to Blue) -->
+      <div class="px-5 py-3 bg-[#07080b] border-b border-[#1e222b] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div class="bg-[#0a0b0e] border border-[#1e222b] rounded-lg px-3.5 py-2">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-[#9ca3af]">Your Life</div>
+          <div id="simLifeDisplay" class="font-mono text-lg font-bold text-[#f4f5f7] mt-0.5">10</div>
+        </div>
+        <div class="bg-[#0a0b0e] border border-[#1e222b] rounded-lg px-3.5 py-2">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-[#9ca3af]">Mana Pool</div>
+          <div id="simManaDisplay" class="font-mono text-base font-bold text-[#cbd5e1] mt-1 flex items-center gap-1 flex-wrap">0</div>
+        </div>
+        <div class="bg-[#0a0b0e] border border-[#1e222b] rounded-lg px-3.5 py-2">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-[#9ca3af]">Library Left</div>
+          <div id="simLibDisplay" class="font-mono text-lg font-bold text-[#eab308] mt-0.5">5</div>
+        </div>
+        <div class="bg-[#0a0b0e] border border-[#1e222b] rounded-lg px-3.5 py-2">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-[#9ca3af]">Blue Devotion</div>
+          <div id="simDevotionDisplay" class="font-mono text-lg font-bold text-blue-400 mt-0.5">0</div>
+        </div>
+      </div>
+
+      <!-- Step-by-Step Interactive Playback Log -->
+      <div id="resolutionStepsContainer" class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 bg-[#050507]">
+        <!-- Steps rendered dynamically -->
+      </div>
+
+      <!-- Final Verdict Banner (Shown on final step or Show All Steps) -->
+      <div id="resolutionVerdictBanner" class="hidden px-5 py-4 border-t border-[#1e222b]">
+        <!-- Victory or Failure Diagnosis injected here -->
+      </div>
+
+      <!-- Step Navigation & Footer Controls -->
+      <div class="px-5 py-3 bg-[#0d0f13] border-t border-[#1e222b] flex flex-wrap items-center justify-between gap-2.5">
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            id="simPrevBtn"
+            type="button"
+            class="px-3 py-1.5 rounded-md bg-[#111318] hover:bg-[#1a1d26] disabled:opacity-40 disabled:cursor-not-allowed border border-[#1e222b] text-xs font-semibold text-[#f4f5f7] transition"
+          >
+            ◀ Prev Step
+          </button>
+          <span id="simStepCounter" class="font-mono text-xs text-[#9ca3af] px-1.5">
+            Step 0 / 1
+          </span>
+          <button
+            id="simNextBtn"
+            type="button"
+            class="px-3 py-1.5 rounded-md bg-[#111318] hover:bg-[#1a1d26] disabled:opacity-40 disabled:cursor-not-allowed border border-[#1e222b] text-xs font-semibold text-[#f4f5f7] transition"
+          >
+            Next Step ▶
+          </button>
+          <button
+            id="simShowAllBtn"
+            type="button"
+            class="px-3 py-1.5 rounded-md bg-[#111318] hover:bg-[#1a1d26] border border-[#eab308]/40 text-xs font-semibold text-[#eab308] transition"
+          >
+            Show All Steps
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            id="simDoneBtn"
+            type="button"
+            class="px-4 py-1.5 rounded-md bg-[#eab308] text-[#050507] text-xs font-bold tracking-wider uppercase hover:brightness-110 transition"
+          >
+            Back to Board
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- RULES & CONTROLS HELP MODAL                                           -->
+  <!-- ===================================================================== -->
+  <div
+    id="helpModal"
+    class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-4"
+  >
+    <div class="w-full max-w-lg bg-[#0a0b0e] border border-[#1e222b] rounded-xl shadow-2xl overflow-hidden">
+      <div class="px-5 py-3.5 bg-[#0d0f13] border-b border-[#1e222b] flex items-center justify-between">
+        <h3 class="text-sm font-bold text-[#f4f5f7]">
+          How Legacy Doomsday Basic Piles Work
+        </h3>
+        <button id="closeHelpBtn" type="button" class="text-[#9ca3af] hover:text-white text-sm">✕</button>
+      </div>
+      <div id="helpModalBody" class="p-5 space-y-3 text-xs sm:text-sm text-[#cbd5e1] leading-relaxed">
+        <!-- Rendered with inline mana badges on init -->
+      </div>
+      <div class="px-5 py-3 bg-[#0d0f13] border-t border-[#1e222b] flex justify-end">
+        <button
+          id="closeHelpBtnBottom"
+          type="button"
+          class="px-4 py-1.5 rounded-md bg-[#eab308] text-[#050507] text-xs font-bold uppercase tracking-wider"
+        >
+          Got It
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- NON-BLOCKING TOAST NOTIFICATION                                       -->
+  <!-- ===================================================================== -->
+  <div
+    id="toastBanner"
+    class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-200"
+  >
+    <div class="px-4 py-2.5 rounded-lg bg-[#111318] border border-[#eab308]/60 text-xs font-semibold text-[#f4f5f7] shadow-2xl flex items-center gap-2">
+      <span class="text-[#eab308]">✦</span>
+      <span id="toastMessage">Ready!</span>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- APPLICATION LOGIC, THROTTLED SCRYFALL LOADER & MTG RULES ENGINE       -->
+  <!-- ===================================================================== -->
+  <script>
+    /**
+     * 1. EXACT 60-CARD LEGACY DOOMSDAY DECKLIST
+     */
+    const DECKLIST = [
+      { qty: 1, name: "Bloodstained Mire" },
+      { qty: 4, name: "Brainstorm" },
+      { qty: 1, name: "Cavern of Souls" },
+      { qty: 1, name: "Consider" },
+      { qty: 4, name: "Dark Ritual" },
+      { qty: 3, name: "Daze" },
+      { qty: 4, name: "Doomsday" },
+      { qty: 2, name: "Duress" },
+      { qty: 2, name: "Edge of Autumn" },
+      { qty: 1, name: "Flooded Strand" },
+      { qty: 1, name: "Flow State" },
+      { qty: 4, name: "Force of Will" },
+      { qty: 1, name: "Island" },
+      { qty: 1, name: "Jace, Wielder of Mysteries" },
+      { qty: 1, name: "Lion's Eye Diamond" },
+      { qty: 3, name: "Lotus Petal" },
+      { qty: 1, name: "Misty Rainforest" },
+      { qty: 1, name: "Pact of Negation" },
+      { qty: 2, name: "Personal Tutor" },
+      { qty: 4, name: "Polluted Delta" },
+      { qty: 4, name: "Ponder" },
+      { qty: 2, name: "Scalding Tarn" },
+      { qty: 2, name: "Street Wraith" },
+      { qty: 1, name: "Swamp" },
+      { qty: 2, name: "Tamiyo, Inquisitive Student" },
+      { qty: 1, name: "Thassa's Oracle" },
+      { qty: 2, name: "Thoughtseize" },
+      { qty: 1, name: "Undercity Sewers" },
+      { qty: 3, name: "Underground Sea" }
+    ];
+
+    /**
+     * 2. CARD METADATA DATABASE (MANA COSTS, TYPES, ORACLE TEXT, HINTS)
+     */
+    const CARD_DB = {
+      "Brainstorm": {
+        manaCost: "{U}",
+        color: "blue",
+        typeLine: "Instant",
+        oracleText: "Draw three cards, then put two cards from your hand on top of your library in any order.",
+        roleHint: "Draws 3 cards for {U}, then tucks 2 cards from hand (such as your blank Duress + a cycler) onto the top of your library."
+      },
+      "Consider": {
+        manaCost: "{U}",
+        color: "blue",
+        typeLine: "Instant",
+        oracleText: "Surveil 1, then draw a card.",
+        roleHint: "Surveil 1 (bin a blank card tucked by Brainstorm into your graveyard), then draw 1 card for {U}."
+      },
+      "Lion's Eye Diamond": {
+        manaCost: "{0}",
+        color: "artifact",
+        typeLine: "Artifact",
+        oracleText: "Sacrifice Lion's Eye Diamond, Discard your hand: Add three mana of any one color. Activate only as an instant.",
+        roleHint: "Adds {U}{U}{U}. Put a cycling ability on the stack first, hold priority, then crack LED for {U}{U}{U}!"
+      },
+      "Lotus Petal": {
+        manaCost: "{0}",
+        color: "artifact",
+        typeLine: "Artifact",
+        oracleText: "{T}, Sacrifice Lotus Petal: Add one mana of any color.",
+        roleHint: "0-mana fast mana artifact (+1 {U} or {B}) to cast Brainstorm or Consider."
+      },
+      "Street Wraith": {
+        manaCost: "{3}{B}{B}",
+        color: "black",
+        typeLine: "Creature — Wraith",
+        oracleText: "Swampwalk\nCycling — Pay 2 life.",
+        roleHint: "0-mana draw via Cycling (pay 2 life). Can hold priority on the stack to crack Lion's Eye Diamond."
+      },
+      "Edge of Autumn": {
+        manaCost: "{1}{G}",
+        color: "green",
+        typeLine: "Sorcery",
+        oracleText: "Cycling — Sacrifice a land. (Sacrifice a land, Discard this card: Draw a card.)",
+        roleHint: "0-mana draw via Cycling (sacrifice a tapped land). Great for drawing the final card into Thassa's Oracle."
+      },
+      "Thassa's Oracle": {
+        manaCost: "{U}{U}",
+        color: "blue",
+        typeLine: "Creature — Merfolk Wizard",
+        oracleText: "When Thassa's Oracle enters, if your devotion to blue is greater than or equal to the number of cards in your library, you win the game.",
+        roleHint: "Primary win condition ({U}{U}). Provides 2 devotion to blue (wins when 0–2 cards remain in library)."
+      },
+      "Underground Sea": {
+        manaCost: "",
+        color: "land-ub",
+        typeLine: "Land — Island Swamp",
+        oracleText: "({T}: Add {U} or {B}.)",
+        roleHint: "Dual land. Taps for {U} or {B}."
+      },
+      "Swamp": {
+        manaCost: "",
+        color: "land-b",
+        typeLine: "Basic Land — Swamp",
+        oracleText: "({T}: Add {B}.)",
+        roleHint: "Basic Swamp (already tapped from Dark Ritual / Doomsday; ideal sacrifice fodder for Edge of Autumn)."
+      },
+      "Duress": {
+        manaCost: "{B}",
+        color: "black",
+        typeLine: "Sorcery",
+        oracleText: "Target opponent reveals their hand. Choose a noncreature, nonland card from it. That player discards that card.",
+        roleHint: "BLANK CARD (no opponent hand to target). Tuck it back with Brainstorm and surveil it away with Consider!"
+      },
+      "Bloodstained Mire": { manaCost: "", color: "land", typeLine: "Land", oracleText: "{T}, Pay 1 life, Sacrifice: Search for a Swamp or Mountain." },
+      "Cavern of Souls": { manaCost: "", color: "land", typeLine: "Land", oracleText: "{T}: Add {C}, or {T}: Add one mana of any color to cast a creature spell of the chosen type." },
+      "Dark Ritual": { manaCost: "{B}", color: "black", typeLine: "Instant", oracleText: "Add {B}{B}{B}." },
+      "Daze": { manaCost: "{1}{U}", color: "blue", typeLine: "Instant", oracleText: "You may return an Island you control to its owner's hand rather than pay this spell's mana cost. Counter target spell unless its controller pays {1}." },
+      "Doomsday": { manaCost: "{B}{B}{B}", color: "black", typeLine: "Sorcery", oracleText: "Search your library and graveyard for five cards and exile the rest. Put the chosen cards on top of your library in any order. You lose half your life, rounded up." },
+      "Flooded Strand": { manaCost: "", color: "land", typeLine: "Land", oracleText: "{T}, Pay 1 life, Sacrifice: Search for a Plains or Island." },
+      "Flow State": { manaCost: "{U}", color: "blue", typeLine: "Enchantment", oracleText: "At the beginning of your upkeep, surveil 1." },
+      "Force of Will": { manaCost: "{3}{U}{U}", color: "blue", typeLine: "Instant", oracleText: "You may pay 1 life and exile a blue card from your hand rather than pay this spell's mana cost. Counter target spell." },
+      "Island": { manaCost: "", color: "land-u", typeLine: "Basic Land — Island", oracleText: "({T}: Add {U}.)" },
+      "Jace, Wielder of Mysteries": { manaCost: "{1}{U}{U}{U}", color: "blue", typeLine: "Legendary Planeswalker — Jace", oracleText: "If you would draw a card while your library has no cards in it, you win the game instead." },
+      "Misty Rainforest": { manaCost: "", color: "land", typeLine: "Land", oracleText: "{T}, Pay 1 life, Sacrifice: Search for a Forest or Island." },
+      "Pact of Negation": { manaCost: "{0}", color: "blue", typeLine: "Instant", oracleText: "Counter target spell. At the beginning of your next upkeep, pay {3}{U}{U}." },
+      "Personal Tutor": { manaCost: "{U}", color: "blue", typeLine: "Sorcery", oracleText: "Search your library for a sorcery card, reveal it, then shuffle and put that card on top." },
+      "Polluted Delta": { manaCost: "", color: "land", typeLine: "Land", oracleText: "{T}, Pay 1 life, Sacrifice: Search for an Island or Swamp." },
+      "Ponder": { manaCost: "{U}", color: "blue", typeLine: "Sorcery", oracleText: "Look at the top three cards of your library, then put them back in any order. You may shuffle. Draw a card." },
+      "Scalding Tarn": { manaCost: "", color: "land", typeLine: "Land", oracleText: "{T}, Pay 1 life, Sacrifice: Search for an Island or Mountain." },
+      "Thoughtseize": { manaCost: "{B}", color: "black", typeLine: "Sorcery", oracleText: "Target player reveals their hand. You choose a nonland card from it. That player discards that card. You lose 2 life." },
+      "Undercity Sewers": { manaCost: "", color: "land-ub", typeLine: "Land — Island Swamp", oracleText: "Enters tapped. When it enters, surveil 1. ({T}: Add {U} or {B}.)" },
+      "Tamiyo, Inquisitive Student": { manaCost: "{U}", color: "blue", typeLine: "Legendary Creature — Moonfolk Wizard", oracleText: "Flying. Whenever Tamiyo attacks, investigate. When you draw your third card in a turn, exile Tamiyo, then return her transformed." }
+    };
+
+    /**
+     * 3. CANDIDATE POOL & 3 FUNDAMENTAL BASIC PILE PUZZLES
+     */
+    const CANDIDATE_POOL = [
+      "Brainstorm",
+      "Consider",
+      "Lion's Eye Diamond",
+      "Lotus Petal",
+      "Street Wraith",
+      "Edge of Autumn",
+      "Thassa's Oracle"
+    ];
+
+    const PUZZLES = [
+      {
+        id: "puzzle-1",
+        tabLabel: "Puzzle 1: Brainstorm + {U}",
+        title: "Puzzle 1: Brainstorm + {U} Open",
+        prompt: "You cast Dark Ritual → Doomsday with Underground Sea untapped ({U} open) and Brainstorm + Street Wraith + Duress in hand. Build a 5-card pile to win this turn!",
+        life: 10,
+        lifeBefore: 20,
+        landDropAvailable: false,
+        spellsCast: 2,
+        cardsDrawn: 0,
+        battlefield: [
+          { id: "p1-sea", name: "Underground Sea", produces: ["U", "B"], tapped: false, initialTapped: false, canTapForMana: true },
+          { id: "p1-swamp", name: "Swamp", produces: ["B"], tapped: true, initialTapped: true, canTapForMana: false }
+        ],
+        hand: ["Brainstorm", "Street Wraith", "Duress"],
+        recommendedWinningPile: [
+          "Lotus Petal",
+          "Consider",
+          "Lion's Eye Diamond",
+          "Edge of Autumn",
+          "Thassa's Oracle"
+        ]
+      },
+      {
+        id: "puzzle-2",
+        tabLabel: "Puzzle 2: Zero Mana Open",
+        title: "Puzzle 2: Zero Mana Open",
+        prompt: "You spent all your mana casting Dark Ritual → Doomsday ({0} mana open, both lands tapped), holding Brainstorm + Street Wraith + Duress. Build the 5-card pile to win this turn!",
+        life: 10,
+        lifeBefore: 20,
+        landDropAvailable: false,
+        spellsCast: 2,
+        cardsDrawn: 0,
+        battlefield: [
+          { id: "p2-sea", name: "Underground Sea", produces: ["U", "B"], tapped: true, initialTapped: true, canTapForMana: false },
+          { id: "p2-swamp", name: "Swamp", produces: ["B"], tapped: true, initialTapped: true, canTapForMana: false }
+        ],
+        hand: ["Brainstorm", "Street Wraith", "Duress"],
+        recommendedWinningPile: [
+          "Lotus Petal",
+          "Edge of Autumn",
+          "Lion's Eye Diamond",
+          "Consider",
+          "Thassa's Oracle"
+        ]
+      },
+      {
+        id: "puzzle-3",
+        tabLabel: "Puzzle 3: Missing Brainstorm",
+        title: "Puzzle 3: Missing Brainstorm",
+        prompt: "You have no Brainstorm in hand—only Consider + Street Wraith + Duress—with Underground Sea untapped ({U} open). Build a 5-card pile to find Brainstorm and win this turn!",
+        life: 10,
+        lifeBefore: 20,
+        landDropAvailable: false,
+        spellsCast: 2,
+        cardsDrawn: 0,
+        battlefield: [
+          { id: "p3-sea", name: "Underground Sea", produces: ["U", "B"], tapped: false, initialTapped: false, canTapForMana: true },
+          { id: "p3-swamp", name: "Swamp", produces: ["B"], tapped: true, initialTapped: true, canTapForMana: false }
+        ],
+        hand: ["Consider", "Street Wraith", "Duress"],
+        recommendedWinningPile: [
+          "Lotus Petal",
+          "Brainstorm",
+          "Lion's Eye Diamond",
+          "Edge of Autumn",
+          "Thassa's Oracle"
+        ]
+      }
+    ];
+
+    /**
+     * 4. APPLICATION STATE
+     */
+    const state = {
+      activePuzzleIdx: 0,
+      puzzleStates: PUZZLES.map(p => ({
+        slots: [null, null, null, null, null],
+        battlefield: JSON.parse(JSON.stringify(p.battlefield)),
+        attemptsUsed: 0,
+        solved: false
+      })),
+      dragSource: null,
+      simSteps: [],
+      simCurrentIdx: 0,
+      simShowAll: false,
+      simResult: null
+    };
+
+    function getActivePuzzle() {
+      return PUZZLES[state.activePuzzleIdx];
+    }
+
+    function getActivePuzzleState() {
+      return state.puzzleStates[state.activePuzzleIdx];
+    }
+
+    /**
+     * 5. CIRCULAR MTG MANA BADGE RENDERER
+     */
+    const MANA_STYLES = {
+      U: { bg: "#0e68ab", fg: "#ffffff", border: "#60a5fa", label: "U" },
+      B: { bg: "#1a171c", fg: "#e2e8f0", border: "#64748b", label: "B" },
+      G: { bg: "#00733e", fg: "#ffffff", border: "#4ade80", label: "G" },
+      R: { bg: "#d3202a", fg: "#ffffff", border: "#f87171", label: "R" },
+      W: { bg: "#f8e7b9", fg: "#1e293b", border: "#fde047", label: "W" },
+      T: { bg: "#334155", fg: "#f8fafc", border: "#94a3b8", label: "↷" }
+    };
+
+    function renderManaSymbols(text, sizeClass = "w-4 h-4 text-[10px]") {
+      if (!text) return "";
+      return String(text).replace(/\{([A-Z0-9]+)\}/g, (_, sym) => {
+        const style = MANA_STYLES[sym] || {
+          bg: "#262b36",
+          fg: "#f4f5f7",
+          border: "#475569",
+          label: sym
+        };
+        return `<span class="inline-flex items-center justify-center rounded-full font-mono font-bold leading-none select-none align-middle shadow-sm ${sizeClass}" style="background:${style.bg};color:${style.fg};border:1px solid ${style.border};" title="{${sym}}">${style.label}</span>`;
+      });
+    }
+
+    /**
+     * 6. THROTTLED SCRYFALL IMAGE LOADER (115ms QUEUE, NO-REFERRER, VERIFIED CACHE)
+     */
+    const verifiedImageUrls = new Map();
+    const scryfallQueue = [];
+    const queuedCardNames = new Set();
+    let isProcessingQueue = false;
+
+    function getScryfallEndpoint(cardName) {
+      return `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cardName)}&format=image&version=normal`;
+    }
+
+    function applyVerifiedUrlToElement(imgEl, url) {
+      const fallbackEl = imgEl.parentElement ? imgEl.parentElement.querySelector(".card-fallback") : null;
+      imgEl.onload = () => {
+        imgEl.classList.remove("opacity-0");
+        imgEl.classList.add("opacity-100");
+        if (fallbackEl) fallbackEl.style.display = "none";
+      };
+      imgEl.onerror = () => {
+        imgEl.classList.add("opacity-0");
+        if (fallbackEl) fallbackEl.style.display = "flex";
+      };
+      imgEl.src = url;
+      if (imgEl.complete && imgEl.naturalWidth > 0) {
+        imgEl.classList.remove("opacity-0");
+        imgEl.classList.add("opacity-100");
+        if (fallbackEl) fallbackEl.style.display = "none";
+      }
+    }
+
+    function enqueueScryfallFetch(cardName) {
+      if (verifiedImageUrls.has(cardName) || queuedCardNames.has(cardName)) return;
+      queuedCardNames.add(cardName);
+      scryfallQueue.push(cardName);
+      if (!isProcessingQueue) {
+        processScryfallQueue();
+      }
+    }
+
+    function processScryfallQueue() {
+      if (scryfallQueue.length === 0) {
+        isProcessingQueue = false;
+        return;
+      }
+      isProcessingQueue = true;
+      const cardName = scryfallQueue.shift();
+      const url = getScryfallEndpoint(cardName);
+
+      const probe = new Image();
+      probe.referrerPolicy = "no-referrer";
+      probe.onload = () => {
+        verifiedImageUrls.set(cardName, url);
+        queuedCardNames.delete(cardName);
+        document.querySelectorAll(`img[data-card-img="${CSS.escape(cardName)}"]`).forEach(imgEl => {
+          applyVerifiedUrlToElement(imgEl, url);
+        });
+        setTimeout(processScryfallQueue, 115);
+      };
+      probe.onerror = () => {
+        queuedCardNames.delete(cardName);
+        setTimeout(processScryfallQueue, 115);
+      };
+      probe.src = url;
+    }
+
+    function hydrateCardImages(rootEl = document) {
+      rootEl.querySelectorAll("img[data-card-img]").forEach(imgEl => {
+        const cardName = imgEl.getAttribute("data-card-img");
+        if (!cardName) return;
+        if (verifiedImageUrls.has(cardName)) {
+          applyVerifiedUrlToElement(imgEl, verifiedImageUrls.get(cardName));
+        } else {
+          enqueueScryfallFetch(cardName);
+        }
+      });
+    }
+
+    /**
+     * 7. MTG CARD SHELL & SKELETON FALLBACK RENDERER
+     */
+    const FRAME_ACCENTS = {
+      blue: "border-blue-500/50 bg-gradient-to-b from-[#0b172a] to-[#0a0b0e]",
+      black: "border-purple-500/40 bg-gradient-to-b from-[#171022] to-[#0a0b0e]",
+      green: "border-emerald-500/40 bg-gradient-to-b from-[#0b1f17] to-[#0a0b0e]",
+      artifact: "border-slate-500/40 bg-gradient-to-b from-[#161922] to-[#0a0b0e]",
+      "land-ub": "border-indigo-400/45 bg-gradient-to-b from-[#101729] to-[#0a0b0e]",
+      "land-b": "border-zinc-500/45 bg-gradient-to-b from-[#161519] to-[#0a0b0e]",
+      "land-u": "border-sky-400/45 bg-gradient-to-b from-[#0d1c2e] to-[#0a0b0e]",
+      land: "border-amber-500/35 bg-gradient-to-b from-[#1b1710] to-[#0a0b0e]"
+    };
+
+    function renderCardShellHTML(cardName, options = {}) {
+      const { compact = false, showOracle = true } = options;
+      const meta = CARD_DB[cardName] || {
+        manaCost: "",
+        color: "artifact",
+        typeLine: "Card",
+        oracleText: ""
+      };
+      const frameClass = FRAME_ACCENTS[meta.color] || FRAME_ACCENTS.artifact;
+      const cachedUrl = verifiedImageUrls.get(cardName) || "";
+
+      return `
+        <div class="relative w-full h-full rounded-lg overflow-hidden border border-[#2a303d] bg-[#0a0b0e] select-none">
+          <!-- Custom MTG Card Fallback Skeleton (automatically hidden when Scryfall artwork loads) -->
+          <div class="card-fallback absolute inset-0 flex flex-col justify-between p-1.5 sm:p-2 border ${frameClass}">
+            <div class="flex items-start justify-between gap-1">
+              <span class="font-semibold ${compact ? 'text-[9px]' : 'text-[11px]'} text-[#f4f5f7] leading-tight line-clamp-2">
+                ${cardName}
+              </span>
+              <span class="shrink-0 flex items-center gap-0.5">
+                ${renderManaSymbols(meta.manaCost, compact ? "w-3 h-3 text-[8px]" : "w-3.5 h-3.5 text-[9px]")}
+              </span>
+            </div>
+
+            <div class="my-auto py-1 border-y border-white/10 text-center">
+              <span class="text-[9px] font-medium text-[#9ca3af] block truncate">
+                ${meta.typeLine}
+              </span>
+            </div>
+
+            ${showOracle ? `
+              <p class="text-[9px] text-[#cbd5e1]/90 leading-snug line-clamp-4">
+                ${renderManaSymbols(meta.oracleText, "w-3 h-3 text-[8px]")}
+              </p>
+            ` : `
+              <span class="text-[8px] font-mono text-[#64748b] text-center">MTG</span>
+            `}
+          </div>
+
+          <!-- High-Resolution Scryfall Card Image -->
+          <img
+            data-card-img="${cardName}"
+            alt="${cardName}"
+            referrerpolicy="no-referrer"
+            ${cachedUrl ? `src="${cachedUrl}"` : ""}
+            class="absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${cachedUrl ? 'opacity-100' : 'opacity-0'}"
+          />
+        </div>
+      `;
+    }
+
+    /**
+     * 8. FLOATING CARD INSPECTOR TOOLTIP
+     */
+    const tooltipEl = document.getElementById("floatingCardTooltip");
+    const tooltipRenderEl = document.getElementById("tooltipCardRender");
+    const tooltipNoteEl = document.getElementById("tooltipCardNote");
+
+    function showCardTooltip(cardName, clientX, clientY) {
+      const meta = CARD_DB[cardName] || {};
+      tooltipRenderEl.innerHTML = renderCardShellHTML(cardName, { compact: false, showOracle: true });
+      tooltipNoteEl.innerHTML = renderManaSymbols(
+        meta.roleHint || meta.oracleText || cardName,
+        "w-3.5 h-3.5 text-[9px]"
+      );
+      hydrateCardImages(tooltipRenderEl);
+
+      tooltipEl.classList.remove("hidden");
+      positionCardTooltip(clientX, clientY);
+    }
+
+    function positionCardTooltip(clientX, clientY) {
+      const pad = 16;
+      const tipW = 245;
+      const tipH = 390;
+      let left = clientX + pad;
+      let top = clientY - 40;
+
+      if (left + tipW > window.innerWidth - pad) {
+        left = clientX - tipW - pad;
+      }
+      if (left < pad) left = pad;
+      if (top + tipH > window.innerHeight - pad) {
+        top = window.innerHeight - tipH - pad;
+      }
+      if (top < pad) top = pad;
+
+      tooltipEl.style.left = `${left}px`;
+      tooltipEl.style.top = `${top}px`;
+    }
+
+    function hideCardTooltip() {
+      tooltipEl.classList.add("hidden");
+    }
+
+    function attachTooltipHandlers(el, cardName) {
+      el.addEventListener("mouseenter", e => showCardTooltip(cardName, e.clientX, e.clientY));
+      el.addEventListener("mousemove", e => positionCardTooltip(e.clientX, e.clientY));
+      el.addEventListener("mouseleave", hideCardTooltip);
+    }
+
+    /**
+     * 9. UI RENDERERS (DECKLIST, HEADER TABS, POOL, BOARD, HAND, PILE SLOTS)
+     */
+    function renderDecklist() {
+      const containers = [
+        document.getElementById("decklistContainer"),
+        document.getElementById("mobileDecklistContainer")
+      ];
+
+      containers.forEach(container => {
+        if (!container) return;
+        container.innerHTML = "";
+        DECKLIST.forEach(entry => {
+          const meta = CARD_DB[entry.name] || {};
+          const row = document.createElement("div");
+          row.className = "flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-[#14171f] cursor-pointer transition text-xs";
+          row.innerHTML = `
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-mono text-[11px] font-bold text-[#eab308] w-4 shrink-0 text-right">${entry.qty}</span>
+              <span class="text-[#e2e8f0] truncate font-medium">${entry.name}</span>
+            </div>
+            <div class="flex items-center gap-0.5 shrink-0">
+              ${renderManaSymbols(meta.manaCost || "", "w-3.5 h-3.5 text-[9px]")}
+            </div>
+          `;
+          attachTooltipHandlers(row, entry.name);
+          row.addEventListener("click", e => {
+            showCardTooltip(entry.name, e.clientX || 140, e.clientY || 140);
+          });
+          container.appendChild(row);
+        });
+      });
+    }
+
+    function renderPuzzleTabsAndHeader() {
+      const tabsContainer = document.getElementById("puzzleTabsContainer");
+      const solvedCount = state.puzzleStates.filter(ps => ps.solved).length;
+      document.getElementById("solvedProgressBadge").textContent = `Solved: ${solvedCount} / ${PUZZLES.length}`;
+
+      tabsContainer.innerHTML = "";
+      PUZZLES.forEach((p, idx) => {
+        const isActive = idx === state.activePuzzleIdx;
+        const isSolved = state.puzzleStates[idx].solved;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `px-3 py-1.5 rounded-md text-xs font-semibold transition flex items-center gap-1.5 border ${
+          isActive
+            ? "bg-[#eab308] text-[#050507] border-[#eab308] shadow-sm"
+            : "bg-[#111318] hover:bg-[#171a22] text-[#cbd5e1] border-[#1e222b]"
+        }`;
+        btn.innerHTML = `
+          <span>${renderManaSymbols(p.tabLabel, "w-3.5 h-3.5 text-[9px]")}</span>
+          ${isSolved ? `<span class="font-mono text-[11px] font-bold ${isActive ? 'text-[#050507]' : 'text-emerald-400'}">✓</span>` : ""}
+        `;
+        btn.addEventListener("click", () => switchPuzzle(idx));
+        tabsContainer.appendChild(btn);
+      });
+
+      const activePuzzle = getActivePuzzle();
+      document.getElementById("puzzleVariationTag").textContent = `Puzzle ${state.activePuzzleIdx + 1}`;
+      document.getElementById("puzzlePromptText").innerHTML = renderManaSymbols(
+        activePuzzle.prompt,
+        "w-3.5 h-3.5 text-[9px]"
+      );
+      document.getElementById("pileBuilderTitle").textContent = `Doomsday Pile — Puzzle ${state.activePuzzleIdx + 1}`;
+
+      // Board header metrics
+      document.getElementById("boardLifeValue").textContent = activePuzzle.life;
+      document.getElementById("boardLifeBefore").textContent = `(${activePuzzle.lifeBefore} before Doomsday)`;
+      document.getElementById("boardSpellsCast").textContent = activePuzzle.spellsCast;
+      document.getElementById("boardCardsDrawn").textContent = activePuzzle.cardsDrawn;
+
+      const landBadge = document.getElementById("boardLandDropBadge");
+      if (activePuzzle.landDropAvailable) {
+        landBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950/70 border border-emerald-500/40 text-emerald-300";
+        landBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Land drop is available`;
+      } else {
+        landBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#111318] border border-[#1e222b] text-[#9ca3af]";
+        landBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-[#64748b]"></span> Land drop used (1/1)`;
+      }
+    }
+
+    function renderCandidatePool() {
+      const container = document.getElementById("candidatePoolContainer");
+      const pState = getActivePuzzleState();
+      container.innerHTML = "";
+
+      CANDIDATE_POOL.forEach((cardName, idx) => {
+        const alreadyPicked = pState.slots.includes(cardName);
+        const wrapper = document.createElement("div");
+        wrapper.draggable = !alreadyPicked;
+        wrapper.className = `pool-card-wrapper relative w-full max-w-[144px] mtg-card-aspect rounded-lg cursor-pointer ${
+          idx > 0 ? "xl:-mt-[118px]" : ""
+        } ${alreadyPicked ? "opacity-35 grayscale cursor-not-allowed" : ""}`;
+        wrapper.style.zIndex = String(idx + 1);
+        wrapper.innerHTML = renderCardShellHTML(cardName, { compact: false, showOracle: true });
+
+        attachTooltipHandlers(wrapper, cardName);
+
+        wrapper.addEventListener("click", () => {
+          if (alreadyPicked) {
+            showToast(`${cardName} is already in your Doomsday pile.`);
+            return;
+          }
+          addCardToFirstEmptySlot(cardName);
+        });
+
+        wrapper.addEventListener("dragstart", e => {
+          if (alreadyPicked) {
+            e.preventDefault();
+            return;
+          }
+          hideCardTooltip();
+          state.dragSource = { type: "pool", cardName };
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", cardName);
+        });
+
+        container.appendChild(wrapper);
+      });
+
+      hydrateCardImages(container);
+    }
+
+    function renderBattlefield() {
+      const container = document.getElementById("battlefieldContainer");
+      const pState = getActivePuzzleState();
+      container.innerHTML = "";
+
+      let plannedBlue = 0;
+      pState.battlefield.forEach(perm => {
+        if (!perm.initialTapped && perm.tapped && perm.produces.includes("U")) {
+          plannedBlue += 1;
+        }
+
+        const cardWrap = document.createElement("div");
+        cardWrap.className = "flex flex-col items-center gap-1.5";
+
+        const cardBtn = document.createElement("button");
+        cardBtn.type = "button";
+        cardBtn.className = `permanent-card relative w-[112px] sm:w-[122px] mtg-card-aspect rounded-lg focus:outline-none ${
+          perm.tapped ? "tapped" : "hover:ring-2 hover:ring-[#eab308]"
+        }`;
+        cardBtn.innerHTML = `
+          ${renderCardShellHTML(perm.name, { compact: false, showOracle: false })}
+          <span class="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-[#050507]/90 border border-[#1e222b] font-mono text-[9px] font-bold text-[#f4f5f7] z-10">
+            ${perm.tapped ? "TAPPED" : "TAP"}
+          </span>
+        `;
+
+        attachTooltipHandlers(cardBtn, perm.name);
+
+        cardBtn.addEventListener("click", () => {
+          if (perm.initialTapped) {
+            showToast(`${perm.name} started this turn already tapped.`);
+            return;
+          }
+          perm.tapped = !perm.tapped;
+          renderBattlefield();
+        });
+
+        const caption = document.createElement("span");
+        caption.className = "text-[11px] font-medium text-[#cbd5e1]";
+        caption.textContent = perm.tapped ? `${perm.name} (Tapped)` : perm.name;
+
+        cardWrap.appendChild(cardBtn);
+        cardWrap.appendChild(caption);
+        container.appendChild(cardWrap);
+      });
+
+      const manaEl = document.getElementById("plannedManaDisplay");
+      if (plannedBlue > 0) {
+        manaEl.innerHTML = Array(plannedBlue).fill("{U}").map(s => renderManaSymbols(s, "w-3.5 h-3.5 text-[9px]")).join("");
+      } else {
+        manaEl.innerHTML = renderManaSymbols("{0}", "w-3.5 h-3.5 text-[9px]");
+      }
+
+      hydrateCardImages(container);
+    }
+
+    function renderHand() {
+      const container = document.getElementById("handContainer");
+      const activePuzzle = getActivePuzzle();
+      document.getElementById("handCountLabel").textContent = `${activePuzzle.hand.length} Cards in Hand`;
+      container.innerHTML = "";
+
+      activePuzzle.hand.forEach(cardName => {
+        const isBlank = cardName === "Duress";
+        const cardWrap = document.createElement("div");
+        cardWrap.className = "flex flex-col items-center gap-1.5";
+
+        const cardBox = document.createElement("div");
+        cardBox.className = `relative w-[112px] sm:w-[122px] mtg-card-aspect rounded-lg shadow-lg ${
+          isBlank ? "ring-1 ring-purple-400/50" : "hover:ring-2 hover:ring-[#eab308]/70"
+        }`;
+        cardBox.innerHTML = `
+          ${renderCardShellHTML(cardName, { compact: false, showOracle: true })}
+          ${isBlank ? `
+            <span class="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-[#050507]/90 border border-purple-400/60 font-mono text-[9px] font-bold text-purple-300 z-10">
+              BLANK CARD
+            </span>
+          ` : ""}
+        `;
+        attachTooltipHandlers(cardBox, cardName);
+
+        const label = document.createElement("span");
+        label.className = `text-[11px] font-medium ${isBlank ? "text-purple-300" : "text-[#cbd5e1]"}`;
+        label.textContent = cardName;
+
+        cardWrap.appendChild(cardBox);
+        cardWrap.appendChild(label);
+        container.appendChild(cardWrap);
+      });
+
+      hydrateCardImages(container);
+    }
+
+    function renderPileSlots() {
+      const container = document.getElementById("pileSlotsContainer");
+      const pState = getActivePuzzleState();
+      container.innerHTML = "";
+
+      pState.slots.forEach((cardName, idx) => {
+        const col = document.createElement("div");
+        col.className = "flex flex-col items-center gap-1.5";
+
+        const header = document.createElement("span");
+        header.className = `font-mono text-[10px] font-bold tracking-wider uppercase ${
+          idx === 0 ? "text-[#eab308]" : "text-[#9ca3af]"
+        }`;
+        header.textContent = idx === 0 ? "1 • TOP" : idx === 4 ? "5 • BTM" : `${idx + 1}`;
+
+        const slotBox = document.createElement("div");
+        slotBox.dataset.slotIdx = String(idx);
+        slotBox.className = `pile-slot relative w-full mtg-card-aspect rounded-lg border transition cursor-pointer overflow-hidden ${
+          cardName
+            ? "border-[#eab308]/70 bg-[#111318] shadow-md hover:border-rose-400"
+            : "empty-slot-hatch border-dashed border-[#2b313e] hover:border-[#eab308]/60"
+        }`;
+
+        if (cardName) {
+          slotBox.draggable = true;
+          slotBox.innerHTML = `
+            ${renderCardShellHTML(cardName, { compact: true, showOracle: false })}
+            <span class="absolute top-1 right-1 w-4 h-4 rounded-full bg-[#050507]/90 border border-[#1e222b] text-[9px] font-bold text-[#cbd5e1] flex items-center justify-center z-10">
+              ✕
+            </span>
+          `;
+          attachTooltipHandlers(slotBox, cardName);
+
+          slotBox.addEventListener("click", () => {
+            hideCardTooltip();
+            pState.slots[idx] = null;
+            syncPileUI();
+          });
+
+          slotBox.addEventListener("dragstart", e => {
+            hideCardTooltip();
+            state.dragSource = { type: "slot", fromIdx: idx, cardName };
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", cardName);
+          });
+        } else {
+          slotBox.innerHTML = `
+            <div class="w-full h-full flex items-center justify-center">
+              <span class="font-mono text-xs text-[#475569]">${idx + 1}</span>
+            </div>
+          `;
+        }
+
+        slotBox.addEventListener("dragover", e => {
+          e.preventDefault();
+          slotBox.classList.add("drag-over");
+        });
+
+        slotBox.addEventListener("dragleave", () => {
+          slotBox.classList.remove("drag-over");
+        });
+
+        slotBox.addEventListener("drop", e => {
+          e.preventDefault();
+          slotBox.classList.remove("drag-over");
+          if (!state.dragSource) return;
+
+          if (state.dragSource.type === "pool") {
+            const existingIdx = pState.slots.indexOf(state.dragSource.cardName);
+            if (existingIdx !== -1) pState.slots[existingIdx] = null;
+            pState.slots[idx] = state.dragSource.cardName;
+          } else if (state.dragSource.type === "slot") {
+            const fromIdx = state.dragSource.fromIdx;
+            const temp = pState.slots[idx];
+            pState.slots[idx] = pState.slots[fromIdx];
+            pState.slots[fromIdx] = temp;
+          }
+          state.dragSource = null;
+          syncPileUI();
+        });
+
+        col.appendChild(header);
+        col.appendChild(slotBox);
+        container.appendChild(col);
+      });
+
+      const isComplete = pState.slots.every(c => c !== null);
+      document.getElementById("submitPileBtn").disabled = !isComplete;
+
+      hydrateCardImages(container);
+    }
+
+    function renderAttemptTracker() {
+      const statusEl = document.getElementById("attemptStatusText");
+      const pState = getActivePuzzleState();
+
+      if (pState.solved) {
+        statusEl.textContent = "✓ Solved • Unlimited Attempts";
+        statusEl.className = "text-[11px] font-bold tracking-wider text-emerald-400 uppercase";
+      } else {
+        statusEl.textContent = "Unlimited Attempts";
+        statusEl.className = "text-[11px] font-semibold tracking-wider text-[#9ca3af] uppercase";
+      }
+    }
+
+    function syncPileUI() {
+      renderCandidatePool();
+      renderPileSlots();
+      renderAttemptTracker();
+    }
+
+    function switchPuzzle(idx) {
+      state.activePuzzleIdx = idx;
+      hideCardTooltip();
+      renderPuzzleTabsAndHeader();
+      renderBattlefield();
+      renderHand();
+      syncPileUI();
+    }
+
+    function addCardToFirstEmptySlot(cardName) {
+      const pState = getActivePuzzleState();
+      const emptyIdx = pState.slots.findIndex(c => c === null);
+      if (emptyIdx === -1) {
+        showToast("All 5 pile slots are full. Click a slot to remove a card first.");
+        return;
+      }
+      pState.slots[emptyIdx] = cardName;
+      syncPileUI();
+    }
+
+    /**
+     * 10. MTG RULES-ACCURATE DOOMSDAY PILE SOLVER & STEP GENERATOR
+     * Searches legal MTG action sequences (tapping lands, casting spells, Brainstorm tucking,
+     * Consider surveiling, Street Wraith / Edge of Autumn cycling + holding priority on LED,
+     * and checking Thassa's Oracle ETB devotion vs remaining library cards).
+     */
+    function solveDoomsdayPile(puzzle, pileTopToBottom) {
+      const initState = {
+        life: puzzle.life,
+        blue: 0,
+        hand: [...puzzle.hand],
+        library: [...pileTopToBottom], // index 0 = top
+        battlefield: puzzle.battlefield.map(b => ({ name: b.name, tapped: b.tapped })),
+        graveyard: ["Dark Ritual", "Doomsday"],
+        stack: [],
+        devotion: 0,
+        steps: [
+          {
+            costStr: "{0}",
+            manaStr: "{0}",
+            life: puzzle.life,
+            libCount: pileTopToBottom.length,
+            devotion: 0,
+            tag: "INITIAL STATE",
+            explanation: `Doomsday resolved. You are at ${puzzle.life} life with [${puzzle.hand.join(", ")}] in hand and your 5-card pile stacked top-to-bottom.`,
+            zones: {
+              hand: [...puzzle.hand],
+              stack: [],
+              battlefield: puzzle.battlefield.map(b => ({ name: b.name, tapped: b.tapped })),
+              library: [...pileTopToBottom],
+              graveyard: ["Dark Ritual", "Doomsday"]
+            }
+          }
+        ]
+      };
+
+      function cloneSim(s) {
+        return {
+          life: s.life,
+          blue: s.blue,
+          hand: [...s.hand],
+          library: [...s.library],
+          battlefield: s.battlefield.map(b => ({ name: b.name, tapped: b.tapped })),
+          graveyard: [...s.graveyard],
+          stack: [...s.stack],
+          devotion: s.devotion,
+          steps: [...s.steps]
+        };
+      }
+
+      function manaString(blue) {
+        if (blue <= 0) return "{0}";
+        return Array(blue).fill("{U}").join("");
+      }
+
+      function recordStep(s, costStr, explanation, tag = "ACTION") {
+        s.steps.push({
+          costStr,
+          manaStr: manaString(s.blue),
+          life: s.life,
+          libCount: s.library.length,
+          devotion: s.devotion,
+          tag,
+          explanation,
+          zones: {
+            hand: [...s.hand],
+            stack: [...s.stack],
+            battlefield: s.battlefield.map(b => ({ name: b.name, tapped: b.tapped })),
+            library: [...s.library],
+            graveyard: [...s.graveyard]
+          }
+        });
+      }
+
+      function stateFingerprint(s) {
+        const bf = s.battlefield.map(b => `${b.name}:${b.tapped ? 1 : 0}`).join(",");
+        return `${s.life}|${s.blue}|${s.hand.slice().sort().join(",")}|${s.library.join(",")}|${bf}`;
+      }
+
+      const visited = new Set();
+      let bestFailedState = initState;
+
+      function scoreProgress(s) {
+        return (5 - s.library.length) * 10 + s.blue * 3 + (s.hand.includes("Thassa's Oracle") ? 8 : 0);
+      }
+
+      function search(cur) {
+        if (cur.steps.length > 14) return null;
+
+        // Win condition check: Thassa's Oracle on battlefield with Devotion >= Library count
+        if (cur.devotion >= 2 && cur.devotion >= cur.library.length) {
+          return cur;
+        }
+
+        if (scoreProgress(cur) > scoreProgress(bestFailedState)) {
+          bestFailedState = cur;
+        }
+
+        const fp = stateFingerprint(cur);
+        if (visited.has(fp)) return null;
+        visited.add(fp);
+
+        // Priority 1: Cast Thassa's Oracle if in hand, >= {U}{U}, and library <= 2
+        if (cur.hand.includes("Thassa's Oracle") && cur.blue >= 2 && cur.library.length <= 2) {
+          const nxt = cloneSim(cur);
+          nxt.hand.splice(nxt.hand.indexOf("Thassa's Oracle"), 1);
+          nxt.blue -= 2;
+          nxt.battlefield.push({ name: "Thassa's Oracle", tapped: false });
+          nxt.devotion += 2;
+          recordStep(
+            nxt,
+            "{U}{U}",
+            `You cast Thassa's Oracle ({U}{U}). It enters the battlefield with 2 devotion to blue and ${nxt.library.length} card${nxt.library.length === 1 ? "" : "s"} left in your library (2 ≥ ${nxt.library.length})—winning the game!`,
+            "ETB TRIGGER WINS"
+          );
+          return nxt;
+        }
+
+        // Priority 2: Cast 0-mana artifacts (Lotus Petal, Lion's Eye Diamond)
+        if (cur.hand.includes("Lotus Petal")) {
+          const nxt = cloneSim(cur);
+          nxt.hand.splice(nxt.hand.indexOf("Lotus Petal"), 1);
+          nxt.battlefield.push({ name: "Lotus Petal", tapped: false });
+          recordStep(nxt, "{0}", "You cast Lotus Petal ({0}) onto the battlefield.");
+          const res = search(nxt);
+          if (res) return res;
+        }
+
+        if (cur.hand.includes("Lion's Eye Diamond")) {
+          const nxt = cloneSim(cur);
+          nxt.hand.splice(nxt.hand.indexOf("Lion's Eye Diamond"), 1);
+          nxt.battlefield.push({ name: "Lion's Eye Diamond", tapped: false });
+          recordStep(nxt, "{0}", "You cast Lion's Eye Diamond ({0}) onto the battlefield, ready to crack with a draw ability on the stack.");
+          const res = search(nxt);
+          if (res) return res;
+        }
+
+        // Priority 3: Tap untapped Underground Sea for {U}
+        const untappedSeaIdx = cur.battlefield.findIndex(b => b.name === "Underground Sea" && !b.tapped);
+        if (untappedSeaIdx !== -1) {
+          const nxt = cloneSim(cur);
+          nxt.battlefield[untappedSeaIdx].tapped = true;
+          nxt.blue += 1;
+          recordStep(nxt, "{0}", "You tap Underground Sea to add {U} to your mana pool.");
+          const res = search(nxt);
+          if (res) return res;
+        }
+
+        // Priority 4: Sacrifice Lotus Petal for {U}
+        const petalIdx = cur.battlefield.findIndex(b => b.name === "Lotus Petal");
+        if (petalIdx !== -1) {
+          const nxt = cloneSim(cur);
+          nxt.battlefield.splice(petalIdx, 1);
+          nxt.graveyard.push("Lotus Petal");
+          nxt.blue += 1;
+          recordStep(nxt, "{0}", "You sacrifice Lotus Petal to add {U} to your mana pool.");
+          const res = search(nxt);
+          if (res) return res;
+        }
+
+        // Priority 5: Cast Consider ({U}) -> Surveil 1 + Draw 1
+        if (cur.hand.includes("Consider") && cur.blue >= 1 && cur.library.length >= 1) {
+          // Option 5A: Surveil 1 into graveyard (if library >= 2)
+          if (cur.library.length >= 2) {
+            const nxt = cloneSim(cur);
+            nxt.hand.splice(nxt.hand.indexOf("Consider"), 1);
+            nxt.blue -= 1;
+            nxt.graveyard.push("Consider");
+            const binned = nxt.library.shift();
+            nxt.graveyard.push(binned);
+            const drawn = nxt.library.shift();
+            nxt.hand.push(drawn);
+            recordStep(
+              nxt,
+              "{U}",
+              `You cast Consider ({U}), surveiling ${binned} into your graveyard and drawing ${drawn}.`
+            );
+            const res = search(nxt);
+            if (res) return res;
+          }
+          // Option 5B: Keep top card on top and draw it
+          {
+            const nxt = cloneSim(cur);
+            nxt.hand.splice(nxt.hand.indexOf("Consider"), 1);
+            nxt.blue -= 1;
+            nxt.graveyard.push("Consider");
+            const drawn = nxt.library.shift();
+            nxt.hand.push(drawn);
+            recordStep(
+              nxt,
+              "{U}",
+              `You cast Consider ({U}), keeping ${drawn} on top with Surveil 1 and drawing ${drawn}.`
+            );
+            const res = search(nxt);
+            if (res) return res;
+          }
+        }
+
+        // Priority 6: Cast Brainstorm ({U}) -> Draw up to 3, put 2 back on top
+        if (cur.hand.includes("Brainstorm") && cur.blue >= 1 && cur.library.length >= 1) {
+          const base = cloneSim(cur);
+          base.hand.splice(base.hand.indexOf("Brainstorm"), 1);
+          base.blue -= 1;
+          base.graveyard.push("Brainstorm");
+
+          const drawCount = Math.min(3, base.library.length);
+          const drawnCards = base.library.splice(0, drawCount);
+          base.hand.push(...drawnCards);
+
+          // Generate smart 2-card put-backs (prioritizing Duress + cyclers/cantrips)
+          if (base.hand.length >= 2) {
+            const candidatePairs = [];
+            for (let i = 0; i < base.hand.length; i++) {
+              for (let j = 0; j < base.hand.length; j++) {
+                if (i === j) continue;
+                const topCard = base.hand[i];
+                const secondCard = base.hand[j];
+                // Never tuck Thassa's Oracle unless forced
+                if ((topCard === "Thassa's Oracle" || secondCard === "Thassa's Oracle") && base.hand.length > 2) {
+                  continue;
+                }
+                candidatePairs.push([topCard, secondCard]);
+              }
+            }
+
+            // Sort pairs so tucking Duress + a cycler/cantrip is explored first
+            candidatePairs.sort((a, b) => {
+              const scorePair = p =>
+                (p.includes("Duress") ? 10 : 0) +
+                (p.includes("Street Wraith") || p.includes("Edge of Autumn") || p.includes("Consider") ? 5 : 0);
+              return scorePair(b) - scorePair(a);
+            });
+
+            const seenPairs = new Set();
+            for (const [topCard, secondCard] of candidatePairs) {
+              const key = `${topCard}|${secondCard}`;
+              if (seenPairs.has(key)) continue;
+              seenPairs.add(key);
+
+              const nxt = cloneSim(base);
+              nxt.hand.splice(nxt.hand.indexOf(topCard), 1);
+              nxt.hand.splice(nxt.hand.indexOf(secondCard), 1);
+              nxt.library.unshift(secondCard);
+              nxt.library.unshift(topCard);
+
+              recordStep(
+                nxt,
+                "{U}",
+                `You cast Brainstorm ({U}), drawing ${drawnCards.join(", ")}. You put ${topCard} on top and ${secondCard} second from top.`
+              );
+              const res = search(nxt);
+              if (res) return res;
+            }
+          }
+        }
+
+        // Priority 7: Cycle Street Wraith (Pay 2 life) — optionally holding priority to crack LED!
+        if (cur.hand.includes("Street Wraith") && cur.life > 2 && cur.library.length >= 1) {
+          const ledIdx = cur.battlefield.findIndex(b => b.name === "Lion's Eye Diamond");
+          // 7A: Hold priority on Street Wraith cycling and crack LED for {U}{U}{U}
+          if (ledIdx !== -1) {
+            const nxt = cloneSim(cur);
+            nxt.hand.splice(nxt.hand.indexOf("Street Wraith"), 1);
+            nxt.life -= 2;
+            nxt.graveyard.push("Street Wraith");
+
+            const discarded = [...nxt.hand];
+            nxt.hand = [];
+            nxt.graveyard.push(...discarded);
+            nxt.battlefield.splice(ledIdx, 1);
+            nxt.graveyard.push("Lion's Eye Diamond");
+            nxt.blue += 3;
+
+            const drawn = nxt.library.shift();
+            nxt.hand.push(drawn);
+            recordStep(
+              nxt,
+              "2 Life",
+              `You cycle Street Wraith (paying 2 life → ${nxt.life}), hold priority, and sacrifice Lion's Eye Diamond for {U}{U}{U}${discarded.length ? ` (discarding ${discarded.join(", ")})` : ""}. Cycling resolves and draws ${drawn}!`
+            );
+            const res = search(nxt);
+            if (res) return res;
+          }
+
+          // 7B: Normal Street Wraith cycle without cracking LED
+          {
+            const nxt = cloneSim(cur);
+            nxt.hand.splice(nxt.hand.indexOf("Street Wraith"), 1);
+            nxt.life -= 2;
+            nxt.graveyard.push("Street Wraith");
+            const drawn = nxt.library.shift();
+            nxt.hand.push(drawn);
+            recordStep(
+              nxt,
+              "2 Life",
+              `You cycle Street Wraith (paying 2 life → ${nxt.life}) to draw ${drawn}.`
+            );
+            const res = search(nxt);
+            if (res) return res;
+          }
+        }
+
+        // Priority 8: Cycle Edge of Autumn (Sacrifice a land) — optionally holding priority to crack LED!
+        const landIdx = cur.battlefield.findIndex(b => b.name === "Swamp" || b.name === "Underground Sea");
+        if (cur.hand.includes("Edge of Autumn") && landIdx !== -1 && cur.library.length >= 1) {
+          const ledIdx = cur.battlefield.findIndex(b => b.name === "Lion's Eye Diamond");
+          // 8A: Hold priority on Edge of Autumn cycling and crack LED for {U}{U}{U}
+          if (ledIdx !== -1) {
+            const nxt = cloneSim(cur);
+            nxt.hand.splice(nxt.hand.indexOf("Edge of Autumn"), 1);
+            const sacLand = nxt.battlefield.splice(landIdx, 1)[0];
+            nxt.graveyard.push("Edge of Autumn", sacLand.name);
+
+            const discarded = [...nxt.hand];
+            nxt.hand = [];
+            nxt.graveyard.push(...discarded);
+            const newLedIdx = nxt.battlefield.findIndex(b => b.name === "Lion's Eye Diamond");
+            nxt.battlefield.splice(newLedIdx, 1);
+            nxt.graveyard.push("Lion's Eye Diamond");
+            nxt.blue += 3;
+
+            const drawn = nxt.library.shift();
+            nxt.hand.push(drawn);
+            recordStep(
+              nxt,
+              `Sac ${sacLand.name}`,
+              `You cycle Edge of Autumn (sacrificing ${sacLand.name}), hold priority, and sacrifice Lion's Eye Diamond for {U}{U}{U}${discarded.length ? ` (discarding ${discarded.join(", ")})` : ""}. Cycling resolves and draws ${drawn}!`
+            );
+            const res = search(nxt);
+            if (res) return res;
+          }
+
+          // 8B: Normal Edge of Autumn cycle
+          {
+            const nxt = cloneSim(cur);
+            nxt.hand.splice(nxt.hand.indexOf("Edge of Autumn"), 1);
+            const sacLand = nxt.battlefield.splice(landIdx, 1)[0];
+            nxt.graveyard.push("Edge of Autumn", sacLand.name);
+            const drawn = nxt.library.shift();
+            nxt.hand.push(drawn);
+            recordStep(
+              nxt,
+              `Sac ${sacLand.name}`,
+              `You cycle Edge of Autumn (sacrificing ${sacLand.name}) to draw ${drawn}.`
+            );
+            const res = search(nxt);
+            if (res) return res;
+          }
+        }
+
+        // Priority 9: Sacrifice Lion's Eye Diamond directly if Thassa's Oracle is already in hand?
+        // (Remember: LED discards your hand, so sacrificing LED with Oracle in hand discards Oracle!)
+        return null;
+      }
+
+      const winningState = search(initState);
+      if (winningState) {
+        return {
+          won: true,
+          steps: winningState.steps,
+          reason: "Thassa's Oracle resolved with sufficient devotion to blue!"
+        };
+      }
+
+      // Build helpful coaching diagnosis if the pile stalled
+      const finalStalled = cloneSim(bestFailedState);
+      let diagnosis = "This pile ran out of either blue mana ({U}{U} for Thassa's Oracle) or draws before reaching Thassa's Oracle.";
+
+      if (!pileTopToBottom.includes("Thassa's Oracle")) {
+        diagnosis = "Your 5-card pile doesn't include Thassa's Oracle—you need a win condition in the pile!";
+      } else if (puzzle.id === "puzzle-2" && pileTopToBottom[0] !== "Lotus Petal") {
+        diagnosis = "With {0} mana open, you need Lotus Petal on top (Slot 1) so cycling Street Wraith from hand immediately unlocks {U} for Brainstorm.";
+      } else if (puzzle.id === "puzzle-3" && !pileTopToBottom.includes("Brainstorm")) {
+        diagnosis = "Since you started without Brainstorm in hand, include Brainstorm in your pile after Lotus Petal so Consider can kickstart your chain.";
+      } else if (!pileTopToBottom.includes("Lion's Eye Diamond")) {
+        diagnosis = "Without Lion's Eye Diamond in the pile, you won't have enough blue mana ({U}{U}) to cast Thassa's Oracle after spending your initial {U}.";
+      } else if (finalStalled.hand.includes("Thassa's Oracle") && finalStalled.blue < 2) {
+        diagnosis = "You drew Thassa's Oracle, but didn't have {U}{U} floating—make sure you hold priority with a cycling ability on the stack before cracking Lion's Eye Diamond!";
+      }
+
+      recordStep(
+        finalStalled,
+        "{0}",
+        `The line stalled here with ${finalStalled.library.length} card${finalStalled.library.length === 1 ? "" : "s"} left in library and ${manaString(finalStalled.blue)} in your mana pool.`,
+        "LINE STALLED"
+      );
+
+      return {
+        won: false,
+        steps: finalStalled.steps,
+        reason: diagnosis
+      };
+    }
+
+    /**
+     * 11. INTERACTIVE STEP-BY-STEP RESOLUTION THEATER CONTROLLER
+     */
+    function openResolutionTheater(result) {
+      state.simResult = result;
+      state.simSteps = result.steps;
+      state.simCurrentIdx = 0;
+      state.simShowAll = false;
+
+      document.getElementById("resolutionModalTitle").textContent = getActivePuzzle().title;
+      document.getElementById("resolutionModal").classList.remove("hidden");
+      renderResolutionStepView();
+    }
+
+    function renderVisualZoneCards(cardList, emptyText = "Empty", options = {}) {
+      const { numbered = false } = options;
+      if (!cardList || cardList.length === 0) {
+        return `<span class="text-xs text-[#64748b] italic py-2">${emptyText}</span>`;
+      }
+      return cardList.map((item, idx) => {
+        const name = typeof item === "string" ? item : item.name;
+        const tapped = typeof item === "object" && item.tapped;
+        return `
+          <div class="flex flex-col items-center gap-1 shrink-0">
+            <div
+              class="relative w-[88px] sm:w-[96px] lg:w-[102px] aspect-[5/7] rounded-lg overflow-hidden shadow-lg transition-transform ${tapped ? "rotate-12 brightness-75 saturate-75 mx-1.5" : ""}"
+              title="${name}${tapped ? " (Tapped)" : ""}"
+            >
+              ${renderCardShellHTML(name, { compact: true, showOracle: false })}
+              ${numbered ? `
+                <span class="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-[#050507]/90 border border-[#eab308]/70 font-mono text-[9px] font-bold text-[#eab308] shadow z-10">
+                  ${idx === 0 ? "TOP" : `#${idx + 1}`}
+                </span>
+              ` : ""}
+              ${tapped ? `
+                <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-[#050507]/90 border border-[#475569] font-mono text-[8px] font-bold text-[#cbd5e1] z-10">
+                  ⤵ TAPPED
+                </span>
+              ` : ""}
+            </div>
+            <span class="text-[10px] font-medium ${tapped ? "text-[#64748b]" : "text-[#cbd5e1]"} max-w-[96px] truncate text-center">
+              ${name}
+            </span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderResolutionStepView() {
+      const container = document.getElementById("resolutionStepsContainer");
+      const verdictBanner = document.getElementById("resolutionVerdictBanner");
+      const badge = document.getElementById("resolutionBadge");
+      const prevBtn = document.getElementById("simPrevBtn");
+      const nextBtn = document.getElementById("simNextBtn");
+      const showAllBtn = document.getElementById("simShowAllBtn");
+      const counterEl = document.getElementById("simStepCounter");
+
+      const total = state.simSteps.length;
+      const activeIdx = state.simShowAll ? total - 1 : state.simCurrentIdx;
+      const activeStep = state.simSteps[activeIdx];
+
+      // Update Top Live State Metrics
+      document.getElementById("simLifeDisplay").textContent = activeStep.life;
+      document.getElementById("simManaDisplay").innerHTML = renderManaSymbols(activeStep.manaStr, "w-4 h-4 text-[10px]");
+      document.getElementById("simLibDisplay").textContent = `${activeStep.libCount} card${activeStep.libCount === 1 ? "" : "s"}`;
+      document.getElementById("simDevotionDisplay").textContent = activeStep.devotion;
+
+      // Update Step Controls
+      counterEl.textContent = state.simShowAll ? `All ${total} Steps` : `Step ${activeIdx} / ${total - 1}`;
+      prevBtn.disabled = state.simShowAll || activeIdx === 0;
+      nextBtn.disabled = state.simShowAll || activeIdx >= total - 1;
+      showAllBtn.textContent = state.simShowAll ? "Step-by-Step View" : "Show All Steps";
+
+      const stepsToRender = state.simShowAll
+        ? state.simSteps.map((s, i) => ({ step: s, idx: i }))
+        : [{ step: activeStep, idx: activeIdx }];
+
+      container.innerHTML = stepsToRender.map(({ step, idx }) => {
+        const isWinStep = step.tag === "ETB TRIGGER WINS";
+        const isFailStep = step.tag === "LINE STALLED";
+        const borderClass = isWinStep
+          ? "border-[#22c55e]/70 bg-[#0b130f]"
+          : isFailStep
+            ? "border-[#ef4444]/70 bg-[#140b0d]"
+            : "border-[#1e222b] bg-[#0a0b0e]";
+
+        return `
+          <div class="rounded-xl border ${borderClass} p-4 sm:p-5 space-y-4">
+            <!-- Uncluttered Step Indicator & Resource Bar -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[#1e222b]">
+              <span class="font-mono text-xs font-bold px-2.5 py-1 rounded bg-[#111318] border border-[#1e222b] text-[#eab308]">
+                Step ${idx}
+              </span>
+
+              <div class="flex items-center gap-3.5 text-xs font-mono">
+                <span class="inline-flex items-center gap-1.5 text-[#9ca3af]">
+                  Cost: <span class="inline-flex items-center gap-0.5">${renderManaSymbols(step.costStr, "w-4 h-4 text-[10px]")}</span>
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-[#9ca3af]">
+                  Pool: <span class="inline-flex items-center gap-0.5">${renderManaSymbols(step.manaStr, "w-4 h-4 text-[10px]")}</span>
+                </span>
+                <span class="text-[#9ca3af]">Library: <strong class="text-[#eab308]">${step.libCount}</strong></span>
+              </div>
+            </div>
+
+            <!-- Clear 1-2 Sentence Plain-English Explanation -->
+            <p class="text-sm sm:text-[15px] text-[#f4f5f7] leading-relaxed">
+              ${renderManaSymbols(step.explanation, "w-4 h-4 text-[10px]")}
+            </p>
+
+            <!-- Large Visual Card Zones -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-1">
+              <!-- Hand & Stack -->
+              <div class="p-3 rounded-lg bg-[#050507] border border-[#1e222b]">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-[#9ca3af] mb-2.5">
+                  Hand (${step.zones.hand.length})${step.zones.stack.length > 0 ? ` • Stack (${step.zones.stack.length})` : ""}
+                </div>
+                <div class="flex flex-wrap items-start gap-3">
+                  ${renderVisualZoneCards(step.zones.hand, "Hand empty")}
+                  ${step.zones.stack.length > 0 ? `
+                    <div class="pl-3 border-l border-[#eab308]/40 flex flex-wrap items-start gap-3">
+                      ${renderVisualZoneCards(step.zones.stack)}
+                    </div>
+                  ` : ""}
+                </div>
+              </div>
+
+              <!-- Battlefield -->
+              <div class="p-3 rounded-lg bg-[#050507] border border-[#1e222b]">
+                <div class="text-[11px] font-bold uppercase tracking-wider text-[#9ca3af] mb-2.5">
+                  Battlefield (${step.zones.battlefield.length})
+                </div>
+                <div class="flex flex-wrap items-start gap-3">
+                  ${renderVisualZoneCards(step.zones.battlefield, "No permanents")}
+                </div>
+              </div>
+
+              <!-- Library Top -> Bottom -->
+              <div class="p-3 rounded-lg bg-[#050507] border border-[#1e222b] lg:col-span-2">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-[#eab308]">
+                    Library — Top → Bottom (${step.zones.library.length})
+                  </span>
+                  <span class="text-[11px] font-mono text-[#9ca3af]">
+                    Graveyard: ${step.zones.graveyard.join(", ")}
+                  </span>
+                </div>
+                <div class="flex flex-wrap items-start gap-3">
+                  ${renderVisualZoneCards(step.zones.library, "0 cards in library (Empty)", { numbered: true })}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      hydrateCardImages(container);
+
+      // Show Victory or Failure Banner on Final Step
+      const isAtEnd = state.simShowAll || activeIdx === total - 1;
+      if (isAtEnd) {
+        if (state.simResult.won) {
+          badge.textContent = "Success!";
+          badge.className = "px-2.5 py-1 rounded text-[11px] font-mono font-bold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-500/50";
+          verdictBanner.className = "px-5 py-4 border-t border-emerald-500/40 bg-emerald-950/35";
+          verdictBanner.innerHTML = `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 class="text-base sm:text-lg font-bold text-emerald-300 tracking-wide">
+                  🎉 SUCCESS!
+                </h4>
+                <p class="text-xs sm:text-sm text-emerald-100/95 mt-0.5">
+                  Want to move to the next puzzle? <span class="text-emerald-300/80 font-mono text-xs">(${getActivePuzzleState().slots.join(" → ")})</span>
+                </p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                <button
+                  id="bannerStayBtn"
+                  type="button"
+                  class="px-3.5 py-2 rounded-md bg-[#111318] hover:bg-[#1a1d26] border border-[#1e222b] text-xs font-semibold text-[#cbd5e1] transition"
+                >
+                  Stay on Board
+                </button>
+                <button
+                  id="bannerNextPuzzleBtn"
+                  type="button"
+                  class="px-4 py-2 rounded-md bg-[#22c55e] hover:brightness-110 text-[#050507] text-xs font-bold tracking-wider uppercase transition"
+                >
+                  ${state.activePuzzleIdx < PUZZLES.length - 1 ? "Next Puzzle →" : "Puzzle 1 →"}
+                </button>
+              </div>
+            </div>
+          `;
+          document.getElementById("bannerStayBtn").addEventListener("click", () => {
+            document.getElementById("resolutionModal").classList.add("hidden");
+          });
+          document.getElementById("bannerNextPuzzleBtn").addEventListener("click", advanceToNextPuzzleFromModal);
+        } else {
+          badge.textContent = "Stalled";
+          badge.className = "px-2.5 py-1 rounded text-[11px] font-mono font-bold uppercase tracking-wider bg-rose-950 text-rose-300 border border-rose-500/50";
+          verdictBanner.className = "px-5 py-4 border-t border-rose-500/40 bg-rose-950/30";
+          verdictBanner.innerHTML = `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 class="text-base sm:text-lg font-bold text-rose-300 tracking-wide">
+                  😞 Oh no... That pile didn't make it.
+                </h4>
+                <p class="text-xs sm:text-sm text-rose-100/90 mt-1 leading-relaxed">
+                  ${renderManaSymbols(state.simResult.reason, "w-3.5 h-3.5 text-[9px]")}
+                </p>
+              </div>
+              <button
+                id="bannerTryAgainBtn"
+                type="button"
+                class="px-4 py-2 rounded-md bg-rose-500 hover:bg-rose-400 text-[#050507] text-xs font-bold tracking-wider uppercase shrink-0 transition"
+              >
+                Try Again
+              </button>
+            </div>
+          `;
+          document.getElementById("bannerTryAgainBtn").addEventListener("click", () => {
+            document.getElementById("resolutionModal").classList.add("hidden");
+          });
+        }
+        verdictBanner.classList.remove("hidden");
+      } else {
+        badge.textContent = `Step ${activeIdx} of ${total - 1}`;
+        badge.className = "px-2.5 py-1 rounded text-[11px] font-mono font-bold uppercase tracking-wider bg-[#111318] text-[#eab308] border border-[#eab308]/40";
+        verdictBanner.classList.add("hidden");
+      }
+    }
+
+    function advanceToNextPuzzleFromModal() {
+      document.getElementById("resolutionModal").classList.add("hidden");
+      const nextIdx = (state.activePuzzleIdx + 1) % PUZZLES.length;
+      switchPuzzle(nextIdx);
+    }
+
+    let toastTimeout = null;
+    function showToast(msg) {
+      const banner = document.getElementById("toastBanner");
+      const msgEl = document.getElementById("toastMessage");
+      msgEl.textContent = msg;
+      banner.classList.remove("opacity-0", "translate-y-2");
+      banner.classList.add("opacity-100", "translate-y-0");
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        banner.classList.add("opacity-0", "translate-y-2");
+        banner.classList.remove("opacity-100", "translate-y-0");
+      }, 2600);
+    }
+
+    /**
+     * 12. INITIALIZATION & EVENT LISTENERS
+     */
+    function initApp() {
+      document.getElementById("helpModalBody").innerHTML = renderManaSymbols(`
+        <p>
+          <strong class="text-[#eab308]">Doomsday</strong> ({B}{B}{B}) has just resolved. Your library and graveyard were exiled, and you must order a <strong>5-card library (1 • TOP to 5 • BTM)</strong> to win on this exact turn.
+        </p>
+        <ul class="list-disc pl-5 space-y-1.5 text-[#cbd5e1]">
+          <li><strong>3 Fundamental Basic Piles:</strong> Switch between <strong>Puzzle 1 (Brainstorm + {U})</strong>, <strong>Puzzle 2 (Zero Mana Open)</strong>, and <strong>Puzzle 3 (Missing Brainstorm)</strong> using the top bar.</li>
+          <li><strong>Handling the Blank Card (Duress):</strong> <strong>Duress</strong> has no target here. Tuck it onto the top of your library with <strong>Brainstorm</strong>, then use <strong>Consider</strong>'s Surveil 1 to put it into your graveyard.</li>
+          <li><strong>Lion's Eye Diamond Stack Trick:</strong> Cast <strong>Lion's Eye Diamond</strong> ({0}), put a cycling ability (<strong>Street Wraith</strong> or <strong>Edge of Autumn</strong>) on the stack, <strong>hold priority</strong>, and sacrifice LED for {U}{U}{U} before drawing!</li>
+        </ul>
+      `, "w-3.5 h-3.5 text-[9px]");
+
+      renderDecklist();
+      switchPuzzle(0);
+
+      // Submit Pile (Unlimited Attempts)
+      document.getElementById("submitPileBtn").addEventListener("click", () => {
+        const p = getActivePuzzle();
+        const pState = getActivePuzzleState();
+        if (pState.slots.some(c => c === null)) return;
+
+        const result = solveDoomsdayPile(p, pState.slots);
+        pState.attemptsUsed++;
+
+        if (result.won && !pState.solved) {
+          pState.solved = true;
+          renderPuzzleTabsAndHeader();
+        }
+        renderAttemptTracker();
+        renderPileSlots();
+
+        openResolutionTheater(result);
+      });
+
+      // Clear Pile
+      document.getElementById("clearPileBtn").addEventListener("click", () => {
+        const pState = getActivePuzzleState();
+        pState.slots = [null, null, null, null, null];
+        syncPileUI();
+      });
+
+      // Reset Lands to Active Puzzle Starting State
+      document.getElementById("untapAllBtn").addEventListener("click", () => {
+        const pState = getActivePuzzleState();
+        pState.battlefield.forEach(perm => {
+          perm.tapped = perm.initialTapped;
+        });
+        renderBattlefield();
+      });
+
+      // Reset Active Puzzle
+      document.getElementById("resetPuzzleBtn").addEventListener("click", () => {
+        const p = getActivePuzzle();
+        const pState = getActivePuzzleState();
+        pState.slots = [null, null, null, null, null];
+        pState.attemptsUsed = 0;
+        pState.solved = false;
+        pState.battlefield = JSON.parse(JSON.stringify(p.battlefield));
+        renderPuzzleTabsAndHeader();
+        renderBattlefield();
+        syncPileUI();
+        showToast(`${p.title} reset.`);
+      });
+
+      // Show Solution for Active Puzzle
+      document.getElementById("loadWinningLineBtn").addEventListener("click", () => {
+        const p = getActivePuzzle();
+        const pState = getActivePuzzleState();
+        pState.slots = [...p.recommendedWinningPile];
+        syncPileUI();
+        showToast(`Loaded winning pile for ${p.title}.`);
+      });
+
+      // Resolution Theater Navigation Controls
+      document.getElementById("simPrevBtn").addEventListener("click", () => {
+        if (state.simCurrentIdx > 0) {
+          state.simCurrentIdx--;
+          renderResolutionStepView();
+        }
+      });
+      document.getElementById("simNextBtn").addEventListener("click", () => {
+        if (state.simCurrentIdx < state.simSteps.length - 1) {
+          state.simCurrentIdx++;
+          renderResolutionStepView();
+        }
+      });
+      document.getElementById("simShowAllBtn").addEventListener("click", () => {
+        state.simShowAll = !state.simShowAll;
+        renderResolutionStepView();
+      });
+      document.getElementById("closeResolutionModal").addEventListener("click", () => {
+        document.getElementById("resolutionModal").classList.add("hidden");
+      });
+      document.getElementById("simDoneBtn").addEventListener("click", () => {
+        document.getElementById("resolutionModal").classList.add("hidden");
+      });
+
+      // Mobile Decklist Drawer
+      document.getElementById("mobileDeckToggle").addEventListener("click", () => {
+        document.getElementById("mobileDeckDrawer").classList.remove("hidden");
+      });
+      document.getElementById("closeMobileDeckDrawer").addEventListener("click", () => {
+        document.getElementById("mobileDeckDrawer").classList.add("hidden");
+      });
+      document.getElementById("mobileDeckDrawer").addEventListener("click", e => {
+        if (e.target.id === "mobileDeckDrawer") {
+          document.getElementById("mobileDeckDrawer").classList.add("hidden");
+        }
+      });
+
+      // Help Modal
+      const openHelp = () => document.getElementById("helpModal").classList.remove("hidden");
+      const closeHelp = () => document.getElementById("helpModal").classList.add("hidden");
+      document.getElementById("openHelpBtn").addEventListener("click", openHelp);
+      document.getElementById("closeHelpBtn").addEventListener("click", closeHelp);
+      document.getElementById("closeHelpBtnBottom").addEventListener("click", closeHelp);
+      document.getElementById("helpModal").addEventListener("click", e => {
+        if (e.target.id === "helpModal") closeHelp();
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", initApp);
+  </script>
+</body>
+</html>
